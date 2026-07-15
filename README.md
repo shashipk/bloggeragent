@@ -160,14 +160,34 @@ python main.py
 
 To deploy your agent to Google Cloud, you need a Google Cloud Project with billing enabled.
 
-### 1. Authenticate with Google Cloud CLI
-Ensure `gcloud` is installed on your machine, then run:
+### 1. Install Google Cloud CLI (gcloud)
+
+If you do not have the Google Cloud CLI (`gcloud`) installed on your machine, select one of the options below:
+
+* **Option A: Using Homebrew (macOS)**
+  ```bash
+  brew install --cask google-cloud-sdk
+  ```
+  *(Restart your terminal session after installation)*
+
+* **Option B: Using the Interactive Installer Script (macOS/Linux)**
+  ```bash
+  curl https://sdk.cloud.google.com | bash
+  exec -l $SHELL
+  gcloud init
+  ```
+
+* **Option C: Windows**
+  Download and run the official [Google Cloud CLI Installer](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe).
+
+### 2. Authenticate with Google Cloud CLI
+Once installed, log in to your Google Cloud account in your terminal:
 ```bash
 gcloud auth login
 gcloud auth list
 ```
 
-### 2. Configure Your Cloud Project
+### 3. Configure Your Cloud Project
 Set your active project ID:
 ```bash
 gcloud config set project <YOUR_PROJECT_ID>
@@ -180,7 +200,7 @@ gcloud services enable \
   cloudbuild.googleapis.com
 ```
 
-### 3. Grant Permissions
+### 4. Grant Permissions
 Retrieve your project number:
 ```bash
 gcloud projects describe <YOUR_PROJECT_ID> --format="value(projectNumber)"
@@ -198,7 +218,7 @@ gcloud projects add-iam-policy-binding <YOUR_PROJECT_ID> \
   --role="roles/aiplatform.user"
 ```
 
-### 4. Deploying
+### 5. Deploying
 
 #### Option A: Deploy the Built-in ADK Web UI
 Run this command from the project root:
