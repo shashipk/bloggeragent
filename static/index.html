@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blogger AI Agent - Custom Chat UI</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Outfit:wght@100..900&display=swap" rel="stylesheet">
+    
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Prism.js for syntax highlighting of generated code -->
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+    
+    <!-- Link to custom styles -->
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Background glowing orbs -->
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+
+    <div class="app-container">
+        <!-- Sidebar showing Multi-Agent Architecture -->
+        <aside class="sidebar glass">
+            <div class="sidebar-header">
+                <h2>ADK Architecture</h2>
+                <p class="subtitle">Multi-Agent Deliberative Loop</p>
+            </div>
+            
+            <div class="flow-steps">
+                <div class="flow-step" id="step-Blogger">
+                    <div class="step-num">1</div>
+                    <div class="step-details">
+                        <h3>Blogger (Coordinator)</h3>
+                        <p>Orchestrates the workflow and receives the user request</p>
+                    </div>
+                </div>
+                <div class="flow-step" id="step-BlogPlanner">
+                    <div class="step-num">2</div>
+                    <div class="step-details">
+                        <h3>BlogPlanner</h3>
+                        <p>Creates outline in Markdown with title, intro, H2s/H3s</p>
+                    </div>
+                </div>
+                <div class="flow-step" id="step-OutlineValidationChecker">
+                    <div class="step-num">3</div>
+                    <div class="step-details">
+                        <h3>Outline Checker</h3>
+                        <p>Verifies structure; triggers planner retry if validation fails</p>
+                    </div>
+                </div>
+                <div class="flow-step" id="step-BlogWriter">
+                    <div class="step-num">4</div>
+                    <div class="step-details">
+                        <h3>BlogWriter</h3>
+                        <p>Drafts full technical post containing detailed code snippets</p>
+                    </div>
+                </div>
+                <div class="flow-step" id="step-BlogPostValidationChecker">
+                    <div class="step-num">5</div>
+                    <div class="step-details">
+                        <h3>Blog Checker</h3>
+                        <p>Checks draft quality, sections & clarity; loops back if needed</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <p>Powered by Google ADK & Gemini</p>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <header class="chat-header glass">
+                <div class="header-info">
+                    <div class="status-indicator">
+                        <span class="pulse-dot"></span>
+                    </div>
+                    <div>
+                        <h1>Blogger Agent</h1>
+                        <span class="active-status" id="agent-status-text">Idle</span>
+                    </div>
+                </div>
+                <button class="clear-btn" id="new-chat-btn">New Chat</button>
+            </header>
+
+            <div class="messages-container" id="messages-box">
+                <div class="message system-message glass">
+                    <div class="message-content">
+                        Hello! I am a deliberative AI blogger powered by Google ADK. Give me a technical topic, and I will plan, outline, write, and validate a blog post for you.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loader / Agent Thinking Progress -->
+            <div class="thinking-loader" id="loader-bar" style="display: none;">
+                <div class="loader-content">
+                    <div class="spinner"></div>
+                    <span id="loader-text">Blogger is preparing to plan...</span>
+                </div>
+            </div>
+
+            <footer class="chat-footer glass">
+                <form class="input-form" id="chat-form">
+                    <input type="text" id="user-input" placeholder="Enter a technical blog topic (e.g., Python asyncio concurrency)..." autocomplete="off" required>
+                    <button type="submit" id="send-btn">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </form>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Frontend logic to handle SSE -->
+    <script>
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const messagesBox = document.getElementById('messages-box');
+        const loaderBar = document.getElementById('loader-bar');
+        const loaderText = document.getElementById('loader-text');
+        const agentStatusText = document.getElementById('agent-status-text');
+        const newChatBtn = document.getElementById('new-chat-btn');
+
+        let sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
+        let currentAgent = '';
+
+        // Configure marked options
+        marked.setOptions({
+            highlight: function(code, lang) {
+                if (Prism.languages[lang]) {
+                    return Prism.highlight(code, Prism.languages[lang], lang);
+                }
+                return code;
+            },
+            breaks: true
+        });
+
+        // Reset step UI
+        function resetSteps() {
+            document.querySelectorAll('.flow-step').forEach(step => {
+                step.classList.remove('active', 'done');
+            });
+        }
+
+        // Set active step in the sidebar
+        function updateActiveStep(agentName) {
+            resetSteps();
+            currentAgent = agentName;
+            
+            // Map agent names to step element IDs
+            const stepId = 'step-' + agentName;
+            const activeStep = document.getElementById(stepId);
+            
+            if (activeStep) {
+                activeStep.classList.add('active');
+                
+                // Mark previous steps as done
+                let prev = activeStep.previousElementSibling;
+                while (prev && prev.classList.contains('flow-step')) {
+                    prev.classList.add('done');
+                    prev = prev.previousElementSibling;
+                }
+            }
+            
+            // Update header status text
+            if (agentName === 'Blogger') {
+                agentStatusText.textContent = 'Blogger Coordinating';
+                loaderText.textContent = 'Blogger is coordinating the plan...';
+            } else if (agentName === 'BlogPlanner') {
+                agentStatusText.textContent = 'Planner outlines...';
+                loaderText.textContent = 'BlogPlanner is researching and drafting outline...';
+            } else if (agentName === 'OutlineValidationChecker') {
+                agentStatusText.textContent = 'Validating outline...';
+                loaderText.textContent = 'OutlineValidationChecker is reviewing structural requirements...';
+            } else if (agentName === 'BlogWriter') {
+                agentStatusText.textContent = 'Writing draft...';
+                loaderText.textContent = 'BlogWriter is drafting the technical article...';
+            } else if (agentName === 'BlogPostValidationChecker') {
+                agentStatusText.textContent = 'Validating post...';
+                loaderText.textContent = 'BlogPostValidationChecker is conducting final review...';
+            } else {
+                agentStatusText.textContent = agentName;
+                loaderText.textContent = `${agentName} is working...`;
+            }
+        }
+
+        newChatBtn.addEventListener('click', () => {
+            sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
+            messagesBox.innerHTML = `
+                <div class="message system-message glass">
+                    <div class="message-content">
+                        Hello! I am a deliberative AI blogger powered by Google ADK. Give me a technical topic, and I will plan, outline, write, and validate a blog post for you.
+                    </div>
+                </div>
+            `;
+            resetSteps();
+            agentStatusText.textContent = 'Idle';
+            loaderBar.style.display = 'none';
+        });
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            // Add user message to UI
+            const userMsgDiv = document.createElement('div');
+            userMsgDiv.className = 'message user-message glass';
+            userMsgDiv.innerHTML = `<div class="message-content">${escapeHTML(message)}</div>`;
+            messagesBox.appendChild(userMsgDiv);
+            
+            userInput.value = '';
+            messagesBox.scrollTop = messagesBox.scrollHeight;
+
+            // Show loader and set first active agent
+            loaderBar.style.display = 'flex';
+            updateActiveStep('Blogger');
+
+            // Setup placeholder for agent response
+            const agentMsgDiv = document.createElement('div');
+            agentMsgDiv.className = 'message agent-message glass';
+            
+            const agentHeader = document.createElement('div');
+            agentHeader.className = 'agent-msg-header';
+            agentHeader.innerHTML = `
+                <span class="agent-badge">Blogger</span>
+                <span class="trace-badge" id="trace-node">Blogger@1</span>
+            `;
+            agentMsgDiv.appendChild(agentHeader);
+
+            const agentContent = document.createElement('div');
+            agentContent.className = 'message-content markdown-body';
+            agentContent.id = 'agent-response-text';
+            agentContent.innerHTML = '<span class="cursor"></span>';
+            agentMsgDiv.appendChild(agentContent);
+
+            messagesBox.appendChild(agentMsgDiv);
+            messagesBox.scrollTop = messagesBox.scrollHeight;
+
+            let fullText = '';
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        session_id: sessionId
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // keep last incomplete line in buffer
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6).trim();
+                            if (!dataStr) continue;
+
+                            try {
+                                const data = JSON.parse(dataStr);
+                                
+                                if (data.error_message) {
+                                    showError(data.error_message);
+                                    continue;
+                                }
+
+                                // Update agent context
+                                if (data.author && data.author !== currentAgent) {
+                                    updateActiveStep(data.author);
+                                    agentHeader.querySelector('.agent-badge').textContent = data.author;
+                                }
+
+                                if (data.node_path) {
+                                    agentHeader.querySelector('#trace-node').textContent = data.node_path;
+                                }
+
+                                // Append text
+                                if (data.text) {
+                                    fullText += data.text;
+                                    agentContent.innerHTML = marked.parse(fullText) + '<span class="cursor"></span>';
+                                    Prism.highlightAllUnder(agentContent);
+                                    messagesBox.scrollTop = messagesBox.scrollHeight;
+                                }
+
+                                // Handle output or final completion
+                                if (data.output) {
+                                    // Set output if it's there and text is empty
+                                    if (!fullText) {
+                                        fullText = typeof data.output === 'string' ? data.output : JSON.stringify(data.output, null, 2);
+                                        agentContent.innerHTML = marked.parse(fullText);
+                                        Prism.highlightAllUnder(agentContent);
+                                        messagesBox.scrollTop = messagesBox.scrollHeight;
+                                    }
+                                }
+                            } catch (e) {
+                                console.error("Error parsing JSON line:", e, line);
+                            }
+                        }
+                    }
+                }
+
+                // Finish
+                loaderBar.style.display = 'none';
+                agentStatusText.textContent = 'Idle';
+                
+                // Remove typing cursor
+                const cursor = agentContent.querySelector('.cursor');
+                if (cursor) cursor.remove();
+
+                // Highlight all completed steps
+                document.querySelectorAll('.flow-step').forEach(step => {
+                    step.classList.add('done');
+                    step.classList.remove('active');
+                });
+
+            } catch (err) {
+                console.error("Fetch error:", err);
+                showError(err.message);
+            }
+        });
+
+        function showError(msg) {
+            loaderBar.style.display = 'none';
+            agentStatusText.textContent = 'Error';
+            resetSteps();
+
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'message error-message glass';
+            errorDiv.innerHTML = `<div class="message-content"><strong>Error:</strong> ${escapeHTML(msg)}</div>`;
+            messagesBox.appendChild(errorDiv);
+            messagesBox.scrollTop = messagesBox.scrollHeight;
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag] || tag)
+            );
+        }
+    </script>
+</body>
+</html>
