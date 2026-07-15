@@ -220,48 +220,83 @@ gcloud projects add-iam-policy-binding <YOUR_PROJECT_ID> \
 
 ### 5. Deploying
 
+> [!IMPORTANT]
+> **Working Directory**: All deployment commands (`adk deploy` and `gcloud run deploy`) **MUST** be run from the root of the **`bloggeragent/`** directory. If you are in the workspace root, change directory first:
+> ```bash
+> cd bloggeragent
+> ```
+
+---
+
+#### Understanding the Environment Tags (`--set-env-vars`)
+When deploying services to Google Cloud Run, we pass custom environment variables to configure how the agent authenticates and communicates with Gemini models:
+* `GOOGLE_GENAI_USE_VERTEXAI`: Set this to `TRUE` to tell the ADK SDK to run on Google Cloud Vertex AI infrastructure. This leverages the Cloud Run service account permissions automatically (meaning you do not need to expose your private API Key in the cloud configuration). Set it to `FALSE` if using the AI Studio Free Tier.
+* `MODEL`: Specifies the Gemini model to invoke. We recommend `gemini-3.5-flash` or `gemini-1.5-pro` (the reasoning model).
+* `GOOGLE_CLOUD_LOCATION`: Specifies the geographical location for Vertex AI API operations (e.g. `global` or `us-east1`).
+* `GOOGLE_API_KEY`: *(Optional)* If Vertex AI is set to `FALSE` (billing-free option), pass your Google AI Studio API Key using this environment variable.
+
+---
+
 #### Option A: Deploy the Built-in ADK Web UI
-Run this command from the project root:
-```bash
-export PROJECT_ID="<YOUR_PROJECT_ID>"
+Deploy the standard ADK container, which runs the default visual graph interface:
 
-adk deploy cloud_run \
-  --project=$PROJECT_ID \
-  --region=us-east1 \
-  --service_name=bloggeragent \
-  --with_ui \
-  . \
-  -- \
-  --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=TRUE,MODEL=gemini-3.5-flash,GOOGLE_CLOUD_LOCATION=global
-```
-- Confirm repository creation when prompted (type `Y`).
-- Allow unauthenticated invocations (type `y`).
-- Once finished, open the provided URL to access the official Web UI!
+1. **Verify your active directory** is `bloggeragent/`:
+   ```bash
+   pwd
+   # Should output: .../bloggeragent
+   ```
+2. **Execute the deployment command**:
+   ```bash
+   export PROJECT_ID="<YOUR_PROJECT_ID>"
 
-#### Option B: Deploy the Custom Chat UI
-Run this command from the project root using the provided `Dockerfile`:
-```bash
-gcloud run deploy bloggeragent-custom \
-  --source . \
-  --region=us-east1 \
-  --allow-unauthenticated \
-  --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=TRUE,MODEL=gemini-3.5-flash,GOOGLE_CLOUD_LOCATION=global
-```
-- Open the resulting service URL in your browser to interact with your customized Glassmorphic Blogger interface live on Google Cloud!
+   adk deploy cloud_run \
+     --project=$PROJECT_ID \
+     --region=us-east1 \
+     --service_name=bloggeragent \
+     --with_ui \
+     . \
+     -- \
+     --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=TRUE,MODEL=gemini-3.5-flash,GOOGLE_CLOUD_LOCATION=global
+   ```
+3. **Confirm deployment settings**:
+   - When asked to create an Artifact Registry repository `cloud-run-source-deploy`, type `Y` and press **Enter**.
+   - When asked to allow unauthenticated invocations to `bloggeragent`, type `y` and press **Enter** (this allows you to access the web URL publicly).
+4. **Access the UI**: Once complete, copy the output URL to open the built-in graph UI in your browser.
+
+---
+
+#### Option B: Deploy the Custom Chat UI (Recommended)
+Build and deploy the custom glassmorphic FastAPI interface using the provided `Dockerfile`:
+
+1. **Verify your active directory** is `bloggeragent/`:
+   ```bash
+   pwd
+   # Should output: .../bloggeragent
+   ```
+2. **Execute the gcloud run command**:
+   ```bash
+   gcloud run deploy bloggeragent-custom \
+     --source . \
+     --region=us-east1 \
+     --allow-unauthenticated \
+     --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=TRUE,MODEL=gemini-3.5-flash,GOOGLE_CLOUD_LOCATION=global
+   ```
+   *(Note: The `--source .` flag compiles the project from your current directory, building it using the `Dockerfile`).*
+3. **Access the Custom UI**: Once successful, open the resulting service URL to view your premium Glassmorphic Blogger Chat Interface!
 
 ---
 
 ## 6. Clean Up
 
-To prevent ongoing charges, delete the deployed Cloud Run services and Artifact Registry repositories:
+To prevent ongoing charges, delete the deployed Cloud Run services and Artifact Registry repositories from your Google Cloud Console or terminal:
 
 ```bash
-# Delete custom service
+# Delete the custom UI service
 gcloud run services delete bloggeragent-custom --region=us-east1 --quiet
 
-# Delete ADK service
+# Delete the standard ADK service
 gcloud run services delete bloggeragent --region=us-east1 --quiet
 
-# Delete Artifact Registry repositories
+# Delete the built Artifact Registry repository
 gcloud artifacts repositories delete cloud-run-source-deploy --location=us-east1 --quiet
 ```
