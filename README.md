@@ -300,3 +300,43 @@ gcloud run services delete bloggeragent --region=us-east1 --quiet
 # Delete the built Artifact Registry repository
 gcloud artifacts repositories delete cloud-run-source-deploy --location=us-east1 --quiet
 ```
+
+---
+
+## 7. Redeploying After Clean Up
+
+If you have performed the clean-up steps and want to deploy the agent again in the future, you do not need to rewrite any code. Since all files remain saved locally on your machine, you can redeploy by following these steps:
+
+1. **Open your terminal** and navigate to your local `bloggeragent/` directory:
+   ```bash
+   cd bloggeragent
+   ```
+2. **Re-authenticate and configure** your Google Cloud project (if you are in a new terminal session or active account session has expired):
+   ```bash
+   gcloud auth login
+   gcloud config set project <YOUR_PROJECT_ID>
+   ```
+3. **Execute the deployment command** for whichever UI option you prefer:
+   * **For the Custom Chat UI**:
+     ```bash
+     gcloud run deploy bloggeragent-custom \
+       --source . \
+       --region=us-east1 \
+       --allow-unauthenticated \
+       --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=TRUE,MODEL=gemini-3.5-flash,GOOGLE_CLOUD_LOCATION=global
+     ```
+   * **For the Built-in ADK UI**:
+     ```bash
+     export PROJECT_ID="<YOUR_PROJECT_ID>"
+     adk deploy cloud_run \
+       --project=$PROJECT_ID \
+       --region=us-east1 \
+       --service_name=bloggeragent \
+       --with_ui \
+       . \
+       -- \
+       --set-env-vars GOOGLE_GENAI_USE_VERTEXAI=TRUE,MODEL=gemini-3.5-flash,GOOGLE_CLOUD_LOCATION=global
+     ```
+     *(Type `Y` to recreate the Artifact Registry repository and `y` to allow unauthenticated access when prompted)*
+
+Google Cloud will automatically recreate the registry repository, compile a new container from your local files, spin up a new Cloud Run instance, and output a new service URL!
