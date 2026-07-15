@@ -40,7 +40,71 @@ graph TD
 
 ---
 
-## 2. Local Setup & Installation
+## 2. User Interfaces & Code Flow
+
+This project implements two different ways to interface with the ADK Blogger Agent. Below is a detailed look at how they work and the corresponding code flows.
+
+### Option A: Standard ADK Web UI
+The Standard Web UI is provided out-of-the-box by the `google-adk` framework.
+* **How it runs**: When you run `adk web` in your terminal, the ADK CLI starts its built-in FastAPI web server. It scans the current directory, finds the `root_agent` exposed in your package, and mounts it.
+* **Flow**:
+  1. The pre-built React/TypeScript frontend asks the server for the agent's definition.
+  2. The UI renders the agent's hierarchical graph structure showing the connection between `Blogger`, `RobustBlogPlanner`, and `RobustBlogWriter`.
+  3. During execution, it streams the full system execution logs and tool outputs, showing you exactly when checkers validate or trigger retries.
+
+### Option B: Premium Custom Chat UI
+The Premium Custom Chat UI uses a custom FastAPI backend (`main.py`) to stream events directly to a custom HTML/CSS/JS frontend (`static/index.html`) using **Server-Sent Events (SSE)**.
+
+```mermaid
+sequenceDiagram
+    participant Browser as Custom Frontend (index.html)
+    participant Server as FastAPI Backend (main.py)
+    participant Runner as ADK InMemoryRunner
+    participant Agent as ADK agent.py
+
+    Browser->>Server: POST /api/chat {message: "..."}
+    Note over Server: Creates InMemoryRunner(agent=root_agent)
+    Server->>Runner: runner.run_async(new_message)
+    
+    loop Stream Agent Events
+        Runner->>Agent: Execute step (e.g., BlogPlanner outlines)
+        Agent-->>Runner: Yield Event
+        Runner-->>Server: Yield Event
+        Note over Server: Extract event text, author & status
+        Server-->>Browser: Stream SSE "data: {JSON}\n\n"
+        Note over Browser: JavaScript parses event<br/>1. Lights up active sub-agent in sidebar<br/>2. Appends text & renders Markdown (marked.js)
+    end
+    
+    Server-->>Browser: Close Connection (Stream complete)
+```
+
+#### 1. Backend Event Streaming (`main.py`)
+In `main.py`, we instantiate the ADK `InMemoryRunner` for our agent:
+```python
+runner = InMemoryRunner(agent=root_agent)
+runner.auto_create_session = True
+```
+When `/api/chat` is hit, it starts `runner.run_async()` asynchronously. As the multi-agent system runs, the runner yields `Event` objects representing text output chunks and transitions. We serialize these events and stream them to the browser:
+```python
+async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=user_msg):
+    data = {
+        "author": event.author,      # Active agent name (e.g., "BlogPlanner", "BlogWriter")
+        "text": text_content,        # Streamed text tokens
+        "output": event.output,      # Final agent output payload
+        "node_path": event.node_info.path if event.node_info else None
+    }
+    yield f"data: {json.dumps(data)}\n\n"
+```
+
+#### 2. Frontend Real-Time Client (`static/index.html`)
+The frontend uses JavaScript to parse this real-time stream:
+* **Streaming Consumer**: The browser uses `fetch()` and consumes the response stream using `response.body.getReader()`. It reads and decodes the stream chunk-by-chunk.
+* **Sub-Agent Tracking**: When a chunk arrives with a new `data.author`, the script automatically selects the corresponding step in the sidebar (e.g. `step-BlogPlanner`, `step-BlogWriter`) and marks it `.active` (making it glow purple) or `.done` (making it green).
+* **Live Markdown Rendering**: It appends new tokens to a cumulative text buffer and runs it through `marked.parse(fullText)` to generate HTML on the fly. It then triggers `Prism.highlightAllUnder(...)` to highlight python or bash code blocks in the article.
+
+---
+
+## 3. Local Setup & Installation
 
 ### Prerequisites
 - Python 3.10 or higher.
@@ -72,7 +136,7 @@ graph TD
 
 ---
 
-## 3. Running Locally
+## 4. Running Locally
 
 ### Option A: Standard ADK Web UI
 This runs the official ADK interactive web console.
@@ -92,7 +156,7 @@ python main.py
 
 ---
 
-## 4. Deploying to Google Cloud Run
+## 5. Deploying to Google Cloud Run
 
 To deploy your agent to Google Cloud, you need a Google Cloud Project with billing enabled.
 
@@ -127,7 +191,7 @@ gcloud projects add-iam-policy-binding <YOUR_PROJECT_ID> \
   --member="serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com" \
   --role="roles/cloudbuild.builds.builder"
 ```
-Grant Vertex AI User permissions to the service account (allowing the Cloud Run instance to invoke Gemini without storing API keys):
+Grant Vertex AI User permissions to the service account (allowing the Cloud Run instance to invoke Gemini without requiring an API key):
 ```bash
 gcloud projects add-iam-policy-binding <YOUR_PROJECT_ID> \
   --member="serviceAccount:<PROJECT_NUMBER>-compute@developer.gserviceaccount.com" \
@@ -167,7 +231,7 @@ gcloud run deploy bloggeragent-custom \
 
 ---
 
-## 5. Clean Up
+## 6. Clean Up
 
 To prevent ongoing charges, delete the deployed Cloud Run services and Artifact Registry repositories:
 
